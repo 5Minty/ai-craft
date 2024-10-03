@@ -1,5 +1,8 @@
-# Ignore the virtual env
-venv/
+# Ignore the virtual environment subfolders but keep venv directory itself
+venv/Include/
+venv/Lib/
+venv/Scripts/
+venv/__pycache__/
 
-# Ignore compiled py files
-__pycache__/
+# Ignore node modules
+node_modules/
