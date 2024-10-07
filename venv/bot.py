@@ -1,6 +1,10 @@
 from javascript import require, On
 import sys
 from dotenv import load_dotenv
+import requests
+from openai import OpenAI
+client = OpenAI() # uses the api_key to create a client object
+from bot_skills import build_shack
 
 import os
 
@@ -20,7 +24,7 @@ class BuilderBot:
 
         """
         try:
-            host = '35.23.178.32'
+            host = '35.23.120.33'
             port = 54569
             username = "R2D2"  # Replace with the desired bot username
             self.bot = mineflayer.createBot({
@@ -44,13 +48,7 @@ class BuilderBot:
             Spawns the bot next to you (need player coords)
 
             """
-            playerFilter = lambda entity: entity.type == 'player'
-            player = self.bot.nearestEntity(playerFilter)
-            if player:
-                pos = player.position
-                self.bot.chat(f"/tp AustinMinty")
-            else:
-                self.bot.chat("No player nearby to teleport to!")
+            self.bot.chat(f"/tp AustinMinty") # TODO: don't hard code this
 
         @On(self.bot, 'chat')
         def on_chat(this, sender, message, *args):
@@ -60,21 +58,34 @@ class BuilderBot:
             Handles chats :param sender: The sender of the message :param message: The message that got sent
 
             """
+            if sender == self.bot.username:
+                return
 
             if message.lower() == 'come':
-                playerFilter = lambda entity: entity.type == 'player'
-                player = self.bot.nearestEntity(playerFilter)
-                if player:
-                    pos = player.position
-                    self.bot.chat(f"/tp AustinMinty")
-                    # Move bot to the player's location (example method, adapt as necessary)
-                    # self.bot.navigate.to(pos), self.bot.moveTo
-                else:
-                    self.bot.chat(f"I cannot come")
+                self.bot.chat(f"/tp AustinMinty") # TODO: don't hard code this
+            elif message.lower() == 'leave':
+                self.bot.chat(f"byeee")
+                # TODO: delete bot
+            elif message.lower() == 'build shack':
+                build_shack(self.bot, 'west')
+            elif message.startswith('/'):
+                return
             else:
-                response = self.get_openai_response(message)
-                if response:
-                    self.bot.chat(response)
+                completion = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert builder in Minecraft that answers concisely and always responds to me as Sammy Wammy."},
+                        {
+                            "role": "user",
+                            "content": message
+                        },
+                        
+                    ],
+                    max_tokens=128
+                )
+
+                print(completion.choices[0].message)
+                self.bot.chat(completion.choices[0].message.content)
 
         @On(self.bot, 'end')
         def on_end(*args):
@@ -84,5 +95,4 @@ class BuilderBot:
             Ends the bot
 
             """
-            # TODO: say a message when leaving or app ending
             print("Bot disconnected.")

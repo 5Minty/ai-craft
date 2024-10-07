@@ -9,7 +9,7 @@ from flask_cors import CORS
 # from transformers import AutoTokenizer
 from g4f import ChatCompletion
 from skills import build_shack
-import bot
+from bot import BuilderBot
 
 app = Flask(__name__)
 CORS(app)
