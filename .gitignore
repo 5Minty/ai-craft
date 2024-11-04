@@ -6,3 +6,6 @@ venv/__pycache__/
 
 # Ignore node modules
 node_modules/
+
+# Ignore schematics
+filtered_schematics_json-10.24/

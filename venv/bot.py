@@ -1,10 +1,11 @@
+from typing import List
 from javascript import require, On
-import sys
 from dotenv import load_dotenv
-import requests
 from openai import OpenAI
 client = OpenAI() # uses the api_key to create a client object
-from bot_skills import build_shack
+from bot_skills import build_shack, place_block, build_from_json
+from llm import MinecraftCodeGenerator
+import json
 
 import os
 
@@ -24,7 +25,7 @@ class BuilderBot:
 
         """
         try:
-            host = '35.23.120.33'
+            host = '35.23.45.22' # TODO: way to call ipconfig and get IPv4?
             port = 54569
             username = "R2D2"  # Replace with the desired bot username
             self.bot = mineflayer.createBot({
@@ -49,6 +50,7 @@ class BuilderBot:
 
             """
             self.bot.chat(f"/tp AustinMinty") # TODO: don't hard code this
+            self.codeGen = MinecraftCodeGenerator()
 
         @On(self.bot, 'chat')
         def on_chat(this, sender, message, *args):
@@ -61,6 +63,8 @@ class BuilderBot:
             if sender == self.bot.username:
                 return
 
+            message = str(message)
+            
             if message.lower() == 'come':
                 self.bot.chat(f"/tp AustinMinty") # TODO: don't hard code this
             elif message.lower() == 'leave':
@@ -68,24 +72,23 @@ class BuilderBot:
                 # TODO: delete bot
             elif message.lower() == 'build shack':
                 build_shack(self.bot, 'west')
+            elif message.lower() == 'build chapel':
+                self.bot.chat('schematics')
+                build_from_json(self.bot, '../filtered_schematics_json-10.24/filtered_schematics_json/2.json') # TODO: add a param to tell function if file needs to be read or not
+            elif message.startswith("build"):
+                self.bot.chat('code_generator')
+                response = self.codeGen.generate_code(message)
+                try:
+                    build_from_json(self.bot, response)
+                
+                except json.JSONDecodeError as json_err:
+                    print(f"Error parsing JSON: {json_err}")
+                except Exception as e:
+                    print(f"Error executing the code: {e}")
             elif message.startswith('/'):
                 return
             else:
-                completion = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are an expert builder in Minecraft that answers concisely and always responds to me as Sammy Wammy."},
-                        {
-                            "role": "user",
-                            "content": message
-                        },
-                        
-                    ],
-                    max_tokens=128
-                )
-
-                print(completion.choices[0].message)
-                self.bot.chat(completion.choices[0].message.content)
+                self.bot.chat("What do you want from me??")
 
         @On(self.bot, 'end')
         def on_end(*args):

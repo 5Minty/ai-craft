@@ -1,3 +1,5 @@
+from models import MinecraftBuild
+
 def place_block(bot, block_type, x, y, z, direction=False):
     valid_directions = {"north", "south", "east", "west"}
     
@@ -8,6 +10,18 @@ def place_block(bot, block_type, x, y, z, direction=False):
         command = f"/setblock {x} {y} {z} {block_type}"
     
     bot.chat(command)
+
+def build_from_json(bot, json_data, isPath=False):
+    # with open(file, 'r') as file:
+    #     json_data = file.read()
+    pos = bot.entity.position
+    base_x = int(pos.x)
+    base_y = int(pos.y)
+    base_z = int(pos.z)
+    # Parse the JSON data into a MinecraftBuild instance
+    minecraft_build = MinecraftBuild.model_validate_json(json_data) # class that parses and holds json using BaseModel 
+    for block in minecraft_build.blocks:
+        place_block(bot, block.block_type, block.x + base_x, block.y + base_y, block.z + base_z, getattr(block, 'direction', False))
 
 
 def build_shack(bot, direction):
@@ -53,4 +67,4 @@ def build_shack(bot, direction):
             place_block(bot, WOOD, base_x + x, base_y + height, base_z + z)
 
     # Send a reload command if needed
-    bot.chat("/reload")
+    # bot.chat("/reload")
