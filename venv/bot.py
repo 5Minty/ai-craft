@@ -12,6 +12,7 @@ import os
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
+ip = os.getenv("IP")
 
 mineflayer = require('mineflayer')
 
@@ -25,7 +26,7 @@ class BuilderBot:
 
         """
         try:
-            host = '35.23.45.22' # TODO: way to call ipconfig and get IPv4?
+            host = ip # TODO: way to call ipconfig and get IPv4?
             port = 54569
             username = "R2D2"  # Replace with the desired bot username
             self.bot = mineflayer.createBot({
