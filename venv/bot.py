@@ -1,8 +1,7 @@
 from typing import List
 from javascript import require, On
 from dotenv import load_dotenv
-from openai import OpenAI
-client = OpenAI() # uses the api_key to create a client object
+# client = OpenAI() uses the api_key to create a client object
 from bot_skills import build_shack, place_block, build_from_json
 from llm import MinecraftCodeGenerator
 import json
@@ -18,7 +17,7 @@ mineflayer = require('mineflayer')
 
 class BuilderBot:
 
-    def init(self):
+    def __init__(self):
 
         """
 
