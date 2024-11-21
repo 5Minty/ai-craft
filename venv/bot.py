@@ -8,7 +8,7 @@ import json
 
 import os
 
-load_dotenv()
+load_dotenv(override=True)
 
 api_key = os.getenv("OPENAI_API_KEY")
 ip = os.getenv("IP")
@@ -25,6 +25,7 @@ class BuilderBot:
 
         """
         try:
+            print(ip)
             host = ip # TODO: way to call ipconfig and get IPv4?
             port = 54569
             username = "R2D2"  # Replace with the desired bot username
