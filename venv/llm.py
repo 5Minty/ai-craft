@@ -105,7 +105,7 @@ class MinecraftCodeGenerator:
 
             self.retriever = self.vectorstore.as_retriever(
                 search_type="similarity", 
-                search_kwargs={"k": 5}
+                search_kwargs={"k": 3}
             )
         else:
             raise ValueError("No documents loaded")
@@ -149,23 +149,33 @@ class MinecraftCodeGenerator:
                         else:
                             raise ValueError("JSON data does not match the expected schema.")
 
-            summarized_docs = []
+            combined_docs = []
 
-            for doc in retrieved_docs:
-                print(f"Retrieved Doc: {doc.page_content}")
+            for i, doc in enumerate(retrieved_docs):
                 schematic_name = doc.page_content
                 context = doc.metadata.get('full_content', doc.page_content)
 
                 python_dict = ast.literal_eval(context)
                 valid_json_string = json.dumps(python_dict)
                 blocks = json.loads(valid_json_string)
+
                 compressed_context = self.compress_blocks(blocks)
-                summarized = self.summarize_blocks(compressed_context, schematic_name)
-                summarized_docs.extend(summarized)
 
-            summarized_docs_json = json.dumps(summarized_docs)
+                # Only summarize blocks for all but the first document
+                if i > 0:
+                    summarized = self.summarize_blocks(compressed_context, schematic_name)
+                    combined_docs.extend(summarized)
+                else:
+                    combined_docs.append({
+                        "schematic_name": schematic_name,
+                        "blocks": compressed_context
+                    })
 
-            final_prompt = self.prompt.format(input=message, context=summarized_docs_json) + f"\n**Bot's Current Position:** {botPosition['x']}, {botPosition['y']}, {botPosition['z']}\n"
+            combined_docs_json = json.dumps(combined_docs)
+
+            # summarized_docs_json = json.dumps(summarized_docs)
+
+            final_prompt = self.prompt.format(input=message, context=combined_docs_json) + f"\n**Bot's Current Position:** {botPosition['x']}, {botPosition['y']}, {botPosition['z']}\n"
             num_tokens = len(self.encoding.encode(final_prompt))
             print("Final Prompt:\n", final_prompt)
             print(f"Total tokens in prompt: {num_tokens}")
@@ -175,7 +185,7 @@ class MinecraftCodeGenerator:
 
             completion = self.rag_chain.invoke({
                 "input": message,
-                "context": summarized_docs_json
+                "context": combined_docs_json
             })
 
             num_tokens = len(self.encoding.encode(completion['answer']))
