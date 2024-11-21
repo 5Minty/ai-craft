@@ -18,20 +18,13 @@ from collections import defaultdict
 from bot_skills import build_from_json
 from stream import StreamCallback
 
-
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 
 class MinecraftCodeGenerator:
-    id_key = 'doc_id' # TODO: should this be a constant??
+    id_key = 'doc_id'
     def __init__(self):
-        
-        """
-
-        Initializes LLM
-
-        """
         self.parser = JsonOutputParser(pydantic_object=MinecraftBuild)
 
         system = """You are a bot designed to generate highly detailed and complex JSON output for building large and intricate structures in Minecraft, following the provided schema and examples.
@@ -52,9 +45,7 @@ class MinecraftCodeGenerator:
 
         with open('few_shot.txt', 'r') as file:
             self.few_shot = file.read()
-            # self.few_shot = self.few_shot[:3000]
 
-        # print(f"Few-shot examples loaded:\n{self.few_shot[:100]}")
         self.llm = ChatOpenAI(model="gpt-4o", request_timeout=300, temperature=0.8, streaming=True)
         self.encoding = tiktoken.encoding_for_model("gpt-4o")
         self.prompt = ChatPromptTemplate.from_messages([("system", system), 
@@ -68,9 +59,8 @@ class MinecraftCodeGenerator:
         **Instructions:**
         - Ensure block counts align with schema.
         - Use only valid Minecraft block IDs (e.g., "stone_bricks", "oak_planks").
-        - Generate JSON in incremental blocks to facilitate streaming.
-        - Ensure each chunk is valid JSON with "blocks" as a complete array.
-        - The final output must merge all streamed parts into a valid JSON structure.                           
+        - Please add decorative blocks like flowers, lighting, and doors
+        - Ensure walls and roofs are completely filled in with no air unless stated otherwise
 
         **Constraints:**
         - Block counts at 100 are capped but may represent larger totals.
@@ -95,7 +85,7 @@ class MinecraftCodeGenerator:
         )
         docs = loader.load()
 
-        doc_ids = [str(uuid.uuid4()) for _ in docs] # Each doc should receive an id
+        doc_ids = [str(uuid.uuid4()) for _ in docs]
 
         summary_docs = [
             Document(page_content=summaries[i], metadata={self.id_key: doc_ids[i], 'full_content': docs[i].page_content})
@@ -111,11 +101,9 @@ class MinecraftCodeGenerator:
                 embedding=OpenAIEmbeddings()
             )
 
-            # self.vectorstore.docstore.mset(list(zip(doc_ids, docs)))
-
             self.retriever = self.vectorstore.as_retriever(
                 search_type="similarity", 
-                search_kwargs={"k": 2}
+                search_kwargs={"k": 5}
             )
         else:
             raise ValueError("No documents loaded")
@@ -134,77 +122,45 @@ class MinecraftCodeGenerator:
         return schematic_names
 
     def generate_code(self, message):
-
-        """
-
-        Sends a message to the LLM and returns its response.
-
-        :param message: The message to be sent
-
-        :return: The LLM's response
-
-        """
         try:
-            # callback = StreamCallback(self.parser)
+            # TODO: callback = StreamCallback(self.parser)
 
             retrieved_docs = self.retriever.invoke(message)
 
             for doc in retrieved_docs:
                         if doc.page_content.lower() in message.lower():
-                            # Build directly from the corresponding JSON file
                             json_data = doc.metadata.get('full_content', doc.page_content)
                             print(f"Exact match found for {doc.page_content}. Building directly from JSON data.")
                             if isinstance(json_data, str):
-                                json_data = json.dumps(ast.literal_eval(json_data))  # Convert to valid JSON string
-                                parsed_data = json.loads(json_data)  # Parse into a Python dictionary
+                                json_data = json.dumps(ast.literal_eval(json_data))
+                                parsed_data = json.loads(json_data)
 
                                 formatted_data = {
-                                    "schematic_name": doc.page_content,  # Add a schematic name
-                                    "blocks": parsed_data  # Use parsed_data directly as blocks
+                                    "schematic_name": doc.page_content,
+                                    "blocks": parsed_data
                                 }
 
                                 print(formatted_data)
                                 if 'blocks' in formatted_data and 'schematic_name' in formatted_data:
-                                    build = MinecraftBuild(**formatted_data)  # Convert to MinecraftBuild
-                                    return build.model_dump_json()  # Return in the required format
+                                    build = MinecraftBuild(**formatted_data)
+                                    return build.model_dump_json()
                                 else:
                                     raise ValueError("JSON data does not match the expected schema.")
 
             summarized_docs = []
 
-            # Process each document
             for doc in retrieved_docs:
                 print(f"Retrieved Doc: {doc.page_content}")
                 schematic_name = doc.page_content
                 context = doc.metadata.get('full_content', doc.page_content)
 
-                # Parse and summarize blocks
                 python_dict = ast.literal_eval(context)
-                valid_json_string = json.dumps(python_dict)  # Convert to valid JSON string
+                valid_json_string = json.dumps(python_dict)
                 blocks = json.loads(valid_json_string)
                 compressed_context = self.compress_blocks(blocks)
                 summarized = self.summarize_blocks(compressed_context, schematic_name)
                 summarized_docs.extend(summarized)
 
-            # TODO: build exact schema if name matches:
-            # for doc in retrieved_docs:
-            #     if message.contains(doc.page_content):
-            #         # build from filtered schema
-
-            # context = "\n".join([doc.metadata.get('full_content', doc.page_content) for doc in retrieved_docs])
-            # print('Context', context[:1000])
-
-            # max_context_length = 10000
-            # if len(context) > max_context_length:
-            #     print(f"Context is too large ({len(context)} characters). Truncating...")
-            #     context = context[:max_context_length]
-            # python_dict = ast.literal_eval(context)
-            # valid_json_string = json.dumps(python_dict)  # Convert to valid JSON string
-            # blocks = json.loads(valid_json_string)
-            # compressed_context = self.compress_blocks(blocks)
-            # # print(compressed_context)
-            # summarized_docs = self.summarize_blocks(compressed_context)
-            
             summarized_docs_json = json.dumps(summarized_docs)
 
             final_prompt = self.prompt.format(input=message, context=summarized_docs_json)
@@ -212,7 +168,7 @@ class MinecraftCodeGenerator:
             print("Final Prompt:\n", final_prompt)
             print(f"Total tokens in prompt: {num_tokens}")
 
-            # for chunk in self.rag_chain.stream({"input": message, "context": summarized_docs_json}):
+            # TODO: for chunk in self.rag_chain.stream({"input": message, "context": summarized_docs_json}):
             #     callback.handle_chunk(chunk)
 
             completion = self.rag_chain.invoke({
@@ -220,12 +176,12 @@ class MinecraftCodeGenerator:
                 "context": summarized_docs_json
             })
 
-            # final_json = callback.get_full_json()
-            # return json.dumps(final_json, indent=2)
-
             num_tokens = len(self.encoding.encode(completion['answer']))
             print("Completion keys:", completion["answer"])
             print(f"Total tokens in response: {num_tokens}")
+
+            # TODO: final_json = callback.get_full_json()
+            # return json.dumps(final_json, indent=2)
 
             answer_text = completion["answer"]
             answer_text = answer_text.replace('```json', '').replace('```', '').strip()
@@ -268,24 +224,14 @@ class MinecraftCodeGenerator:
         for block in blocks:
             block_type = block["block_type"]
             coordinates = block["coordinates"]
+            block_count = len(coordinates)
             
-            # Calculate bounding box for coordinates
-            min_x = min(coord[0] for coord in coordinates)
-            max_x = max(coord[0] for coord in coordinates)
-            min_y = min(coord[1] for coord in coordinates)
-            max_y = max(coord[1] for coord in coordinates)
-            min_z = min(coord[2] for coord in coordinates)
-            max_z = max(coord[2] for coord in coordinates)
-            
-            summarized.append({
-                "schematic_name": schematic_name,
-                "block_type": block_type,
-                "coordinate_bounds": {
-                    "x": [min_x, max_x],
-                    "y": [min_y, max_y],
-                    "z": [min_z, max_z]
-                },
-                "block_count": len(coordinates)  # Add count for context
-            })
+            if block_count >= 5:
+                summarized.append({
+                    "schematic_name": schematic_name,
+                    "block_type": block_type,
+                    "block_count": block_count
+                })
         
         return summarized
+
