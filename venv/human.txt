@@ -1,0 +1,16 @@
+{input}
+
+        **Refer to these detailed schematics to generate a highly detailed and intricate build:**
+
+        {context}
+
+        **Instructions:**
+        - **Scale and Size:** The build should be a large structure, with each block type having a similar count to the schema counts.
+        - **Architectural Elements:** Add details like railings, stairs, ladders, windows, and roofs.
+        - **Scale Comparison:** Match or exceed the scale and complexity of the example structures provided in the context.
+        - **Structural Integrity:** Ensure the build appears well-supported and fully completed
+
+        **Constraints:**
+        - Return a JSON structure that includes a 'schematic_name' and a comprehensive list of 'blocks'.
+        - Use up to the maximum token limit for generating a large and intricate design.
+        - Make sure the number of blocks used are close to the count of each block in the schema

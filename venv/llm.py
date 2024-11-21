@@ -16,6 +16,7 @@ from langchain.schema import Document
 import tiktoken
 from collections import defaultdict
 from bot_skills import build_from_json
+from stream import StreamCallback
 
 
 load_dotenv()
@@ -35,23 +36,8 @@ class MinecraftCodeGenerator:
 
         system = """You are a bot designed to generate highly detailed and complex JSON output for building large and intricate structures in Minecraft, following the provided schema and examples.
 
-        **Core Objectives:**
-        1. Create builds that are large in scale and architecturally complex.
-        2. Incorporate varied materials, patterns, and intricate designs.
-        3. Include features such as multiple layers, detailed decorations, and thematic additions.
-        4. Maintain structural integrity and a logical layout.
-        5. Match or exceed the scale and complexity of the example schematics provided.
-
-        **Important Guidelines:**
-        - Use only valid Minecraft block IDs (e.g., "stone_bricks", "oak_planks") in your output.
-        - Ensure all block names match the official Minecraft block IDs.
-        - Keep the scale, complexity, and style consistent with the reference schematics.
-        - The number of each block should be around the same as the count for each block in the schematics.
-        - Use creative arrangements and ensure features like rooms, platforms, or distinct sections are present.
-        - Incorporate architectural elements such as balconies, staircases, bridges, and windows.
-
         **JSON Output Requirements:**
-        Return only raw JSON output, strictly following this schema:
+        Return raw JSON with this schema:
 
         {{
             "schematic_name": string,
@@ -61,7 +47,7 @@ class MinecraftCodeGenerator:
             ]
         }}
 
-        - Return **ONLY** the raw JSON with no markdown formatting or code block syntax.
+        - Only raw JSON, no markdown or code block syntax.
         """
 
         with open('few_shot.txt', 'r') as file:
@@ -69,7 +55,7 @@ class MinecraftCodeGenerator:
             # self.few_shot = self.few_shot[:3000]
 
         # print(f"Few-shot examples loaded:\n{self.few_shot[:100]}")
-        self.llm = ChatOpenAI(model="gpt-4o", request_timeout=90, temperature=0.7)
+        self.llm = ChatOpenAI(model="gpt-4o", request_timeout=300, temperature=0.8, streaming=True)
         self.encoding = tiktoken.encoding_for_model("gpt-4o")
         self.prompt = ChatPromptTemplate.from_messages([("system", system), 
             HumanMessagePromptTemplate.from_template("""
@@ -80,14 +66,15 @@ class MinecraftCodeGenerator:
         {context}
 
         **Instructions:**
-        - **Scale and Size:** The build should be a large structure, with each block type having a similar count to the schema counts.
-        - **Architectural Elements:** Add details like railings, stairs, ladders, windows, and roofs.
-        - **Scale Comparison:** Match or exceed the scale and complexity of the example structures provided in the context.
-        - **Structural Integrity:** Ensure the build appears well-supported and fully completed
+        - Ensure block counts align with schema.
+        - Use only valid Minecraft block IDs (e.g., "stone_bricks", "oak_planks").
+        - Generate JSON in incremental blocks to facilitate streaming.
+        - Ensure each chunk is valid JSON with "blocks" as a complete array.
+        - The final output must merge all streamed parts into a valid JSON structure.                           
 
         **Constraints:**
-        - Return a JSON structure that includes a 'schematic_name' and a comprehensive list of 'blocks'.
-        - Use up to the maximum token limit for generating a large and intricate design.
+        - Block counts at 100 are capped but may represent larger totals.
+        - Use up to the maximum token limit.
         """)])
             
         self._initialize_retriever()
@@ -128,11 +115,10 @@ class MinecraftCodeGenerator:
 
             self.retriever = self.vectorstore.as_retriever(
                 search_type="similarity", 
-                search_kwargs={"k": 1}
+                search_kwargs={"k": 2}
             )
         else:
             raise ValueError("No documents loaded")
-            # TODO: invoke retreiver to see if it finds the right docs - "How do I build a chapel"
 
     def get_schematic_names(self, directory):
         schematic_names = []
@@ -159,6 +145,7 @@ class MinecraftCodeGenerator:
 
         """
         try:
+            # callback = StreamCallback(self.parser)
 
             retrieved_docs = self.retriever.invoke(message)
 
@@ -207,7 +194,7 @@ class MinecraftCodeGenerator:
             # context = "\n".join([doc.metadata.get('full_content', doc.page_content) for doc in retrieved_docs])
             # print('Context', context[:1000])
 
-            # max_context_length = 20000
+            # max_context_length = 10000
             # if len(context) > max_context_length:
             #     print(f"Context is too large ({len(context)} characters). Truncating...")
             #     context = context[:max_context_length]
@@ -225,10 +212,16 @@ class MinecraftCodeGenerator:
             print("Final Prompt:\n", final_prompt)
             print(f"Total tokens in prompt: {num_tokens}")
 
+            # for chunk in self.rag_chain.stream({"input": message, "context": summarized_docs_json}):
+            #     callback.handle_chunk(chunk)
+
             completion = self.rag_chain.invoke({
                 "input": message,
                 "context": summarized_docs_json
             })
+
+            # final_json = callback.get_full_json()
+            # return json.dumps(final_json, indent=2)
 
             num_tokens = len(self.encoding.encode(completion['answer']))
             print("Completion keys:", completion["answer"])
@@ -254,13 +247,15 @@ class MinecraftCodeGenerator:
             )
             return default_build.model_dump_json()
         
-    def compress_blocks(self, blocks):
+    def compress_blocks(self, blocks, max_count=100):
         grouped = defaultdict(list)
         for block in blocks:
             grouped[block["block_type"]].append((block["x"], block["y"], block["z"]))
         
         compressed = []
         for block_type, coords in grouped.items():
+            if len(coords) > max_count:
+                coords = coords[:max_count]
             compressed.append({
                 "block_type": block_type,
                 "coordinates": coords
@@ -290,7 +285,7 @@ class MinecraftCodeGenerator:
                     "y": [min_y, max_y],
                     "z": [min_z, max_z]
                 },
-                "count": len(coordinates)  # Add count for context
+                "block_count": len(coordinates)  # Add count for context
             })
         
         return summarized
