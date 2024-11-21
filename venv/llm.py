@@ -59,15 +59,17 @@ class MinecraftCodeGenerator:
         **Instructions:**
         - Ensure block counts align with schema.
         - Use only valid Minecraft block IDs (e.g., "stone_bricks", "oak_planks").
-        - Please add decorative blocks like flowers, lighting, and doors
-        - Ensure walls and roofs are completely filled in with no air unless stated otherwise
+        - Please add decorative blocks like flowers, lighting, and doors.
+        - Ensure walls and roofs are completely filled in with no air.
+        - Determine facing directions for orientable blocks based on the bots fixed position.
 
         **Constraints:**
         - Block counts at 100 are capped but may represent larger totals.
         - Use up to the maximum token limit.
+        - Only return RAW JSON, no comments or markdown.
         """)])
             
-        self._initialize_retriever()
+        self._initialize_retriever()    
         
         if self.retriever:
             question_answer_chain = create_stuff_documents_chain(self.llm, self.prompt)
@@ -121,31 +123,31 @@ class MinecraftCodeGenerator:
                     schematic_names.append(schematic_name)
         return schematic_names
 
-    def generate_code(self, message):
+    def generate_code(self, message, botPosition):
         try:
             # TODO: callback = StreamCallback(self.parser)
 
             retrieved_docs = self.retriever.invoke(message)
 
             for doc in retrieved_docs:
-                        if doc.page_content.lower() in message.lower():
-                            json_data = doc.metadata.get('full_content', doc.page_content)
-                            print(f"Exact match found for {doc.page_content}. Building directly from JSON data.")
-                            if isinstance(json_data, str):
-                                json_data = json.dumps(ast.literal_eval(json_data))
-                                parsed_data = json.loads(json_data)
+                if doc.page_content.lower() in message.lower():
+                    json_data = doc.metadata.get('full_content', doc.page_content)
+                    print(f"Exact match found for {doc.page_content}. Building directly from JSON data.")
+                    if isinstance(json_data, str):
+                        json_data = json.dumps(ast.literal_eval(json_data))
+                        parsed_data = json.loads(json_data)
 
-                                formatted_data = {
-                                    "schematic_name": doc.page_content,
-                                    "blocks": parsed_data
-                                }
+                        formatted_data = {
+                            "schematic_name": doc.page_content,
+                            "blocks": parsed_data
+                        }
 
-                                print(formatted_data)
-                                if 'blocks' in formatted_data and 'schematic_name' in formatted_data:
-                                    build = MinecraftBuild(**formatted_data)
-                                    return build.model_dump_json()
-                                else:
-                                    raise ValueError("JSON data does not match the expected schema.")
+                        print(formatted_data)
+                        if 'blocks' in formatted_data and 'schematic_name' in formatted_data:
+                            build = MinecraftBuild(**formatted_data)
+                            return build.model_dump_json()
+                        else:
+                            raise ValueError("JSON data does not match the expected schema.")
 
             summarized_docs = []
 
@@ -163,7 +165,7 @@ class MinecraftCodeGenerator:
 
             summarized_docs_json = json.dumps(summarized_docs)
 
-            final_prompt = self.prompt.format(input=message, context=summarized_docs_json)
+            final_prompt = self.prompt.format(input=message, context=summarized_docs_json) + f"\n**Bot's Current Position:** {botPosition['x']}, {botPosition['y']}, {botPosition['z']}\n"
             num_tokens = len(self.encoding.encode(final_prompt))
             print("Final Prompt:\n", final_prompt)
             print(f"Total tokens in prompt: {num_tokens}")
@@ -227,11 +229,34 @@ class MinecraftCodeGenerator:
             block_count = len(coordinates)
             
             if block_count >= 5:
+                # direction = None
+                # if "stairs" in block_type or "door" in block_type or "trapdoor" in block_type: # TODO: make container of orientable blocks
+                #     direction = self.determine_orientation_toward_open_space(
+                #         coordinates[0][0],  # x
+                #         coordinates[0][1],  # y
+                #         coordinates[0][2],  # z
+                #         blocks  # all blocks in the schematic
+                #     )
+
                 summarized.append({
                     "schematic_name": schematic_name,
                     "block_type": block_type,
-                    "block_count": block_count
+                    "block_count": block_count,
+                    # "direction": direction
                 })
         
         return summarized
+
+    def determine_orientation_toward_open_space(self, x, y, z, all_blocks):
+        neighbors = {
+            "north": (x, y, z - 1),
+            "south": (x, y, z + 1),
+            "east": (x + 1, y, z),
+            "west": (x - 1, y, z)
+        }
+        for direction, coord in neighbors.items():
+            if coord not in [b["coordinates"] for b in all_blocks]:
+                return direction
+        return "north"
+
 

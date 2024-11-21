@@ -68,7 +68,7 @@ class BuilderBot:
                 build_from_json(self.bot, '../filtered_schematics_json-10.24/filtered_schematics_json/2.json')  # TODO: add a param to tell function if file needs to be read or not
             elif message.startswith("build"):
                 self.bot.chat("building...")
-                response = self.codeGen.generate_code(message)
+                response = self.codeGen.generate_code(message, self.bot.entity.position)
                 try:
                     build_from_json(self.bot, response)
                 except json.JSONDecodeError as json_err:

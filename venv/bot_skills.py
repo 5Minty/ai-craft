@@ -5,6 +5,7 @@ def place_block(bot, block_type, x, y, z, direction=False):
     
     # Format the command and send it using bot.chat instead of print
     if direction in valid_directions:
+        # print(direction)
         command = f"/setblock {x} {y} {z} {block_type}[facing={direction}]"
     else:
         command = f"/setblock {x} {y} {z} {block_type}"
@@ -21,7 +22,8 @@ def build_from_json(bot, json_data, isPath=False):
     # Parse the JSON data into a MinecraftBuild instance
     minecraft_build = MinecraftBuild.model_validate_json(json_data) # class that parses and holds json using BaseModel 
     for block in minecraft_build.blocks:
-        place_block(bot, block.block_type, block.x + base_x, block.y + base_y, block.z + base_z, getattr(block, 'direction', False))
+        direction = getattr(block, 'facing', False)
+        place_block(bot, block.block_type, block.x + base_x, block.y + base_y, block.z + base_z, direction)
 
 
 def build_shack(bot, direction):
